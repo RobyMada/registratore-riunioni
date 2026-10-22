@@ -34,3 +34,12 @@ npm start              # serve interfaccia e API sulla porta PORT
 ```
 
 Serve un server sempre acceso con HTTPS (necessario per usare il microfono dal browser) e una cartella persistente per `DATA_DIR`.
+
+Con Docker (Railway, VPS o server proprio):
+
+```bash
+docker build -t registratore-riunioni .
+docker run -p 3000:3000 -v registratore-dati:/data --env-file .env registratore-riunioni
+```
+
+La cartella `/data` contiene database, audio e documenti: va montata su un disco persistente.
