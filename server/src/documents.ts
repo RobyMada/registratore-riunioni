@@ -1,7 +1,7 @@
 export const DOCUMENT_TYPES = {
   verbale: {
     label: "Verbale della riunione",
-    instructions: `Redigi il verbale formale della riunione. Includi: data, partecipanti (usa i nomi se emergono dalla conversazione, altrimenti "Partecipante A", "Partecipante B"), ordine del giorno ricostruito, sintesi della discussione per punto, decisioni prese, azioni da svolgere con responsabile e scadenza quando indicati, punti rimasti aperti.`,
+    instructions: `Redigi il verbale formale della riunione. Includi: data, partecipanti (solo se emergono dalla conversazione), ordine del giorno ricostruito, sintesi della discussione per punto, decisioni prese, azioni da svolgere con responsabile e scadenza quando indicati, punti rimasti aperti.`,
   },
   riassunto: {
     label: "Riassunto dell'incontro",

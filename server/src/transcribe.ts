@@ -1,12 +1,14 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
+import path from "node:path";
+import { promisify } from "node:util";
 import { config } from "./config.js";
 
-const API = "https://api.assemblyai.com/v2";
+const run = promisify(execFile);
 
-interface Utterance {
-  speaker: string;
+interface WhisperSegment {
+  offsets: { from: number; to: number };
   text: string;
-  start: number;
 }
 
 function timestamp(ms: number) {
@@ -17,44 +19,32 @@ function timestamp(ms: number) {
   return `${hh}:${mm}:${ss}`;
 }
 
-async function call(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${API}${path}`, {
-    ...init,
-    headers: { authorization: config.assemblyAiKey, ...init.headers },
-  });
-  if (!res.ok) throw new Error(`AssemblyAI ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-/** Trascrive il file audio in italiano, separando chi parla. */
+/** Trascrive il file audio in italiano con Whisper, sul server e senza servizi a pagamento. */
 export async function transcribe(audioPath: string): Promise<string> {
-  if (config.mockAi) {
-    return "[00:00:00] Partecipante A: Questa è una trascrizione di prova generata senza servizi esterni.";
+  if (config.mockTranscription) {
+    return "[00:00:00] Questa è una trascrizione di prova generata senza Whisper.";
   }
-  if (!config.assemblyAiKey) throw new Error("ASSEMBLYAI_API_KEY non configurata");
 
-  const audio = await fs.readFile(audioPath);
-  const { upload_url } = await call("/upload", {
-    method: "POST",
-    headers: { "content-type": "application/octet-stream" },
-    body: audio,
-  });
-  const job = await call("/transcript", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ audio_url: upload_url, language_code: "it", speaker_labels: true }),
-  });
-
-  for (;;) {
-    await new Promise((r) => setTimeout(r, 5000));
-    const result = await call(`/transcript/${job.id}`);
-    if (result.status === "error") throw new Error(`Trascrizione fallita: ${result.error}`);
-    if (result.status === "completed") {
-      const utterances: Utterance[] = result.utterances ?? [];
-      if (utterances.length === 0) return result.text ?? "";
-      return utterances
-        .map((u) => `[${timestamp(u.start)}] Partecipante ${u.speaker}: ${u.text}`)
-        .join("\n");
-    }
+  const dir = path.dirname(audioPath);
+  const wav = path.join(dir, "registrazione.wav");
+  const output = path.join(dir, "trascrizione");
+  // Whisper vuole audio WAV mono a 16 kHz
+  await run("ffmpeg", ["-y", "-loglevel", "error", "-i", audioPath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav]);
+  try {
+    await run(
+      config.whisperBin,
+      ["-m", config.whisperModel, "-f", wav, "-l", "it", "-t", String(config.whisperThreads), "-oj", "-of", output, "-np"],
+      { maxBuffer: 64 * 1024 * 1024 },
+    );
+  } finally {
+    await fs.rm(wav, { force: true });
   }
+
+  const result = JSON.parse(await fs.readFile(`${output}.json`, "utf8"));
+  const segments: WhisperSegment[] = result.transcription ?? [];
+  return segments
+    .map((s) => s.text.trim())
+    .map((text, i) => (text ? `[${timestamp(segments[i].offsets.from)}] ${text}` : ""))
+    .filter(Boolean)
+    .join("\n");
 }

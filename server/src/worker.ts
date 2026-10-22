@@ -1,8 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { audioDir, db, type Meeting, type MeetingDocument } from "./db.js";
-import { isDocumentType } from "./documents.js";
-import { generateDocument } from "./generate.js";
+import { audioDir, db, type Meeting } from "./db.js";
 import { transcribe } from "./transcribe.js";
 
 /** Unisce i blocchi registrati in un unico file audio. */
@@ -25,33 +23,7 @@ function assembleAudio(meeting: Meeting) {
 
 const setStatus = db.prepare(`UPDATE meetings SET status = ?, error = ? WHERE id = ?`);
 
-async function processMeeting(meeting: Meeting) {
-  let transcript = meeting.transcript;
-  if (!transcript) {
-    setStatus.run("transcribing", null, meeting.id);
-    transcript = await transcribe(assembleAudio(meeting));
-    db.prepare(`UPDATE meetings SET transcript = ? WHERE id = ?`).run(transcript, meeting.id);
-  }
-
-  setStatus.run("generating", null, meeting.id);
-  const docs = db
-    .prepare(`SELECT * FROM documents WHERE meeting_id = ? AND status = 'queued'`)
-    .all(meeting.id) as MeetingDocument[];
-  for (const doc of docs) {
-    if (!isDocumentType(doc.type)) continue;
-    try {
-      const content = await generateDocument(doc.type, meeting.title, meeting.created_at.slice(0, 10), transcript);
-      db.prepare(`UPDATE documents SET status = 'done', content = ?, error = NULL WHERE meeting_id = ? AND type = ?`)
-        .run(content, meeting.id, doc.type);
-    } catch (err) {
-      db.prepare(`UPDATE documents SET status = 'error', error = ? WHERE meeting_id = ? AND type = ?`)
-        .run(String(err), meeting.id, doc.type);
-    }
-  }
-  setStatus.run("done", null, meeting.id);
-}
-
-/** Elabora in sequenza le riunioni in coda, in background rispetto alle richieste HTTP. */
+/** Trascrive in sequenza le riunioni in coda, in background rispetto alle richieste HTTP. */
 export function startWorker() {
   let busy = false;
   setInterval(async () => {
@@ -62,7 +34,9 @@ export function startWorker() {
     if (!meeting) return;
     busy = true;
     try {
-      await processMeeting(meeting);
+      setStatus.run("transcribing", null, meeting.id);
+      const transcript = await transcribe(assembleAudio(meeting));
+      db.prepare(`UPDATE meetings SET transcript = ?, status = 'done' WHERE id = ?`).run(transcript, meeting.id);
     } catch (err) {
       setStatus.run("error", String(err), meeting.id);
     } finally {

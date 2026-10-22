@@ -38,12 +38,12 @@ export interface MeetingSummary {
   id: string;
   title: string;
   created_at: string;
-  status: "recording" | "queued" | "transcribing" | "generating" | "done" | "error";
+  status: "recording" | "queued" | "transcribing" | "done" | "error";
   error: string | null;
-  documents: { type: string; status: string; error: string | null }[];
+  documents: { type: string; status: "pending" | "done" }[];
 }
 
 export interface MeetingDetail extends Omit<MeetingSummary, "documents"> {
   transcript: string | null;
-  documents: { type: string; status: string; content: string | null; error: string | null }[];
+  documents: { type: string; status: "pending" | "done"; content: string | null; prompt: string | null }[];
 }

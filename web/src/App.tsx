@@ -12,10 +12,9 @@ import { Recorder } from "./recorder";
 
 const STATUS_LABEL: Record<MeetingSummary["status"], string> = {
   recording: "Registrazione in corso",
-  queued: "In coda",
+  queued: "In coda per la trascrizione",
   transcribing: "Trascrizione in corso",
-  generating: "Generazione documenti",
-  done: "Pronto",
+  done: "Trascrizione pronta",
   error: "Errore",
 };
 
@@ -184,7 +183,7 @@ function RecordView({
     return (
       <DocumentPicker
         title="Quali documenti vuoi generare?"
-        hint="L'elaborazione avviene sul server: puoi chiudere l'app, ti avviseremo quando è pronto."
+        hint="La trascrizione avviene sul server: puoi chiudere l'app. Quando è pronta trovi nell'Archivio il testo da copiare in Claude."
         documentTypes={documentTypes}
         submitLabel="Genera"
         onSubmit={submit}
@@ -316,7 +315,7 @@ function ArchiveView({ onOpen, onError }: { onOpen: (id: string) => void; onErro
 async function notifyReady(title: string) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const registration = await navigator.serviceWorker?.getRegistration();
-  const body = `I documenti di "${title}" sono pronti.`;
+  const body = `La trascrizione di "${title}" è pronta.`;
   if (registration) await registration.showNotification("Registratore riunioni", { body, icon: "/icon.svg" });
   else new Notification("Registratore riunioni", { body });
 }
@@ -357,9 +356,9 @@ function MeetingView({
   if (adding) {
     return (
       <DocumentPicker
-        title="Genera un altro documento"
+        title="Aggiungi un altro documento"
         documentTypes={documentTypes}
-        submitLabel="Genera"
+        submitLabel="Aggiungi"
         onSubmit={async (documents) => {
           try {
             await api(`/api/meetings/${id}/documents`, { method: "POST", body: JSON.stringify({ documents }) });
@@ -405,17 +404,67 @@ function MeetingView({
             </button>
           </div>
         </>
-      ) : current?.status === "error" ? (
-        <p className="hint warn">{current.error}</p>
-      ) : (
-        <p className="hint">Il documento è in preparazione. Puoi chiudere l'app, ti avviseremo quando è pronto.</p>
-      )}
+      ) : current?.prompt ? (
+        <ClaudeSteps
+          key={current.type}
+          prompt={current.prompt}
+          onSave={async (content) => {
+            try {
+              await api(`/api/meetings/${id}/documents/${current.type}`, {
+                method: "PUT",
+                body: JSON.stringify({ content }),
+              });
+              await load();
+            } catch (err) {
+              onError(err);
+            }
+          }}
+        />
+      ) : current ? (
+        <p className="hint">Quando la trascrizione è pronta qui trovi il testo da copiare in Claude. Puoi chiudere l'app.</p>
+      ) : null}
       {meeting.status !== "recording" && (
         <button className="link" onClick={() => setAdding(true)}>
-          + Genera un altro documento
+          + Aggiungi un altro documento
         </button>
       )}
     </section>
+  );
+}
+
+function ClaudeSteps({ prompt, onSave }: { prompt: string; onSave: (content: string) => Promise<void> }) {
+  const [copied, setCopied] = useState(false);
+  const [content, setContent] = useState("");
+  return (
+    <ol className="steps">
+      <li>
+        <button
+          className="primary"
+          onClick={async () => {
+            await navigator.clipboard.writeText(prompt);
+            setCopied(true);
+          }}
+        >
+          {copied ? "Copiato ✓" : "Copia il testo per Claude"}
+        </button>
+      </li>
+      <li>
+        <a className="primary" href="https://claude.ai/new" target="_blank" rel="noreferrer">
+          Apri Claude e incolla
+        </a>
+      </li>
+      <li>
+        <textarea
+          placeholder="Incolla qui il documento scritto da Claude per conservarlo nell'archivio"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={6}
+        />
+        <button className="primary" disabled={!content.trim()} onClick={() => onSave(content)}>
+          Salva nell'archivio
+        </button>
+      </li>
+    </ol>
   );
 }
 

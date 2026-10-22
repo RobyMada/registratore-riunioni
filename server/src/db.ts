@@ -15,7 +15,7 @@ db.exec(`
     created_at TEXT NOT NULL,
     mime_type TEXT NOT NULL,
     chunk_count INTEGER NOT NULL DEFAULT 0,
-    -- recording | queued | transcribing | generating | done | error
+    -- recording | queued | transcribing | done | error
     status TEXT NOT NULL DEFAULT 'recording',
     error TEXT,
     transcript TEXT
@@ -23,16 +23,15 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS documents (
     meeting_id TEXT NOT NULL REFERENCES meetings(id),
     type TEXT NOT NULL,
-    -- queued | done | error
-    status TEXT NOT NULL DEFAULT 'queued',
+    -- pending: in attesa che l'utente incolli il documento generato in Claude; done: salvato
+    status TEXT NOT NULL DEFAULT 'pending',
     content TEXT,
-    error TEXT,
     PRIMARY KEY (meeting_id, type)
   );
 `);
 
 // Un lavoro interrotto da un riavvio del server riparte dalla coda
-db.exec(`UPDATE meetings SET status = 'queued' WHERE status IN ('transcribing', 'generating')`);
+db.exec(`UPDATE meetings SET status = 'queued' WHERE status = 'transcribing'`);
 
 export interface Meeting {
   id: string;
@@ -50,7 +49,6 @@ export interface MeetingDocument {
   type: string;
   status: string;
   content: string | null;
-  error: string | null;
 }
 
 export function audioDir(meetingId: string) {

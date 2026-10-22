@@ -7,6 +7,7 @@ import fastifyStatic from "@fastify/static";
 import { config } from "./config.js";
 import { audioDir, db, type Meeting, type MeetingDocument } from "./db.js";
 import { DOCUMENT_TYPES, isDocumentType } from "./documents.js";
+import { buildPrompt } from "./prompt.js";
 import { startWorker } from "./worker.js";
 
 const app = Fastify({ logger: true, bodyLimit: 50 * 1024 * 1024 });
@@ -25,6 +26,10 @@ app.addHook("onRequest", async (req, reply) => {
 function getMeeting(id: string) {
   return db.prepare(`SELECT * FROM meetings WHERE id = ?`).get(id) as Meeting | undefined;
 }
+
+const insertDocument = db.prepare(
+  `INSERT INTO documents (meeting_id, type) VALUES (?, ?) ON CONFLICT (meeting_id, type) DO NOTHING`,
+);
 
 function documentsOf(id: string) {
   return db.prepare(`SELECT * FROM documents WHERE meeting_id = ? ORDER BY type`).all(id) as MeetingDocument[];
@@ -69,31 +74,37 @@ app.post<{ Params: { id: string }; Body: { chunkCount: number; documents: string
       }
     }
     db.transaction(() => {
-      db.prepare(`UPDATE meetings SET status = 'queued', chunk_count = ? WHERE id = ?`).run(chunkCount, meeting.id);
-      const insert = db.prepare(
-        `INSERT INTO documents (meeting_id, type) VALUES (?, ?)
-         ON CONFLICT (meeting_id, type) DO UPDATE SET status = 'queued', content = NULL, error = NULL`,
-      );
-      for (const type of types) insert.run(meeting.id, type);
+      if (meeting.status === "recording") {
+        db.prepare(`UPDATE meetings SET status = 'queued', chunk_count = ? WHERE id = ?`).run(chunkCount, meeting.id);
+      }
+      for (const type of types) insertDocument.run(meeting.id, type);
     })();
     return { ok: true };
   },
 );
 
-// Chiede un altro documento per una riunione già trascritta
+// Aggiunge un altro documento a una riunione già registrata
 app.post<{ Params: { id: string }; Body: { documents: string[] } }>("/api/meetings/:id/documents", async (req, reply) => {
   const meeting = getMeeting(req.params.id);
   if (!meeting) return reply.code(404).send({ error: "Riunione non trovata" });
   if (meeting.status === "recording") return reply.code(409).send({ error: "Registrazione in corso" });
-  const types = (req.body?.documents ?? []).filter(isDocumentType);
-  const insert = db.prepare(
-    `INSERT INTO documents (meeting_id, type) VALUES (?, ?)
-     ON CONFLICT (meeting_id, type) DO UPDATE SET status = 'queued', content = NULL, error = NULL`,
-  );
-  for (const type of types) insert.run(meeting.id, type);
-  db.prepare(`UPDATE meetings SET status = 'queued', error = NULL WHERE id = ?`).run(meeting.id);
+  for (const type of (req.body?.documents ?? []).filter(isDocumentType)) insertDocument.run(meeting.id, type);
   return { ok: true };
 });
+
+// Salva il documento che l'utente ha generato con Claude e incollato nell'app
+app.put<{ Params: { id: string; type: string }; Body: { content?: string } }>(
+  "/api/meetings/:id/documents/:type",
+  async (req, reply) => {
+    const content = req.body?.content?.trim();
+    if (!content) return reply.code(400).send({ error: "Il documento è vuoto" });
+    const result = db
+      .prepare(`UPDATE documents SET status = 'done', content = ? WHERE meeting_id = ? AND type = ?`)
+      .run(content, req.params.id, req.params.type);
+    if (result.changes === 0) return reply.code(404).send({ error: "Documento non trovato" });
+    return { ok: true };
+  },
+);
 
 app.get("/api/meetings", async () => {
   const meetings = db
@@ -101,14 +112,21 @@ app.get("/api/meetings", async () => {
     .all() as Meeting[];
   return meetings.map((m) => ({
     ...m,
-    documents: documentsOf(m.id).map(({ type, status, error }) => ({ type, status, error })),
+    documents: documentsOf(m.id).map(({ type, status }) => ({ type, status })),
   }));
 });
 
 app.get<{ Params: { id: string } }>("/api/meetings/:id", async (req, reply) => {
   const meeting = getMeeting(req.params.id);
   if (!meeting) return reply.code(404).send({ error: "Riunione non trovata" });
-  return { ...meeting, documents: documentsOf(meeting.id) };
+  const date = meeting.created_at.slice(0, 10);
+  return {
+    ...meeting,
+    documents: documentsOf(meeting.id).map((d) => ({
+      ...d,
+      prompt: meeting.transcript && isDocumentType(d.type) ? buildPrompt(d.type, meeting.title, date, meeting.transcript) : null,
+    })),
+  };
 });
 
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist");
