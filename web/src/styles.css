@@ -1,0 +1,63 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1c1b1f;
+  --muted: #6b6870;
+  --accent: #b3261e;
+  --surface: #f4f1f3;
+  --border: #ddd8dc;
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141316;
+    --fg: #e8e4e9;
+    --muted: #a19ca4;
+    --accent: #f2b8b5;
+    --surface: #211f24;
+    --border: #3a373d;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); }
+button { font: inherit; color: inherit; cursor: pointer; }
+.app { max-width: 720px; margin: 0 auto; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+h1 { font-size: 1.2rem; margin: 0; }
+nav { display: flex; gap: 4px; background: var(--surface); border-radius: 999px; padding: 4px; }
+nav button { border: 0; background: none; padding: 8px 16px; border-radius: 999px; }
+nav button.active, .tabs button.active { background: var(--accent); color: var(--bg); }
+.record { display: flex; flex-direction: column; align-items: center; gap: 24px; padding-top: 48px; }
+.title, input[type="password"] { width: 100%; padding: 12px; font-size: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--fg); }
+.timer { font-size: 3rem; font-variant-numeric: tabular-nums; }
+.record-button { width: 120px; height: 120px; border-radius: 50%; border: 6px solid var(--accent); background: none; display: grid; place-items: center; }
+.record-button .dot { width: 80px; height: 80px; border-radius: 50%; background: var(--accent); }
+.record-button .square { width: 44px; height: 44px; border-radius: 8px; background: var(--accent); }
+.record-button.recording { animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { opacity: 0.6; } }
+.hint { color: var(--muted); text-align: center; }
+.warn { color: var(--accent); }
+.picker { display: flex; flex-direction: column; gap: 12px; padding-top: 24px; }
+.option { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; font-size: 1.05rem; }
+.option input { width: 22px; height: 22px; }
+.primary { padding: 14px; border: 0; border-radius: 12px; background: var(--accent); color: var(--bg); font-size: 1.05rem; }
+.primary:disabled { opacity: 0.5; }
+.meetings { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.meetings button { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.meetings span { color: var(--muted); font-size: 0.9rem; }
+.status.done { color: #2e7d32; }
+.status.error { color: var(--accent); }
+.meeting { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; }
+.meeting h2 { margin: 0; }
+.link { border: 0; background: none; color: var(--accent); padding: 0; text-align: left; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button, .actions button { border: 1px solid var(--border); background: var(--surface); padding: 8px 12px; border-radius: 999px; }
+.actions { display: flex; gap: 8px; }
+.document { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; line-height: 1.5; background: var(--surface); padding: 16px; border-radius: 12px; margin: 0; }
+.login { display: flex; flex-direction: column; gap: 16px; padding-top: 64px; }
+.login label { display: flex; flex-direction: column; gap: 8px; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: 24px; max-width: 480px; margin: 0 auto; padding: 12px 16px; border-radius: 12px; background: var(--fg); color: var(--bg); }
+.steps { display: flex; flex-direction: column; gap: 16px; padding: 0; margin: 0; list-style: none; }
+.steps li { display: flex; flex-direction: column; gap: 8px; }
+.steps a.primary { display: block; text-align: center; text-decoration: none; }
+.steps textarea { width: 100%; padding: 12px; font: inherit; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--fg); }
