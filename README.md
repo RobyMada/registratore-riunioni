@@ -39,7 +39,7 @@ npm run build
 npm start              # serve interfaccia e API sulla porta PORT
 ```
 
-Serve un server sempre acceso con HTTPS (necessario per usare il microfono dal browser) e una cartella persistente per `DATA_DIR`.
+Serve un server sempre acceso con HTTPS (necessario per usare il microfono dal browser) e una cartella persistente per `DATA_DIR`. Guida gratuita passo passo: [docs/messa-online.md](docs/messa-online.md).
 
 Con Docker (Railway, VPS o server proprio):
 
